@@ -27,7 +27,7 @@
 
     $opts = array(
         'user'    => 'root',
-        'pass'    => 'GkMDk6br',
+        'pass'    => '',
         'db'      => $database,
         'host'  => '192.168.1.37'
     );
