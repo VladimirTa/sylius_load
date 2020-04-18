@@ -1,0 +1,32 @@
+#!/usr/bin/expect -f
+set timeout -1
+spawn ../bin/console sylius:install
+expect "Would you like to reset it? (y/N)"
+send -- "y\r"
+
+expect "Continue? (y/N)"
+send -- "N\r"
+expect "Currency (press enter to use USD):"
+send -- "RUB\r"
+expect "Language (press enter to use en_US):"
+send -- "ru_RU\r"
+expect "E-mail:"
+send -- "tarkhantsevva@yandex.ru\r"
+expect "Username (press enter to use email):"
+send -- "\r"
+expect "Choose password:"
+send -- "19801979\r"
+expect "Confirm password:"
+send -- "19801979\r"
+expect eof
+
+spawn ../bin/console sylius:user:promote
+expect ">"
+send -- "0\r"
+expect "Please enter an email:"
+send -- "tarkhantsevva@yandex.ru\r"
+expect "Please enter user's roles (separated by space):"
+send -- "ROLE_API_ACCESS\r"
+expect eof
+
+spawn rm token client_auth

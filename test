@@ -1,0 +1,153 @@
+#!/bin/bash
+
+url="http://192.168.1.144:8000/api"
+database="old_shop2"
+
+NORMAL='\033[0m'
+RED='\033[0;31m'       #  ${RED}      # красный цвет знаков
+GREEN='\033[0;32m'     #  ${GREEN}    # зелёный цвет знаков
+BLUE='\033[0;34m'       #  ${BLUE}      # синий цвет знаков
+
+access_token="$(./get_token)"
+echo -e "${RED}актуальный токен:${NORMAL} $access_token"
+
+Args() {
+    printf "%d args:" $#
+    printf " <%s>" "$@"
+    echo
+}
+prog() {
+    local w=80 p=$1;  shift
+    # create a string of spaces, then change them to dots
+    printf -v dots "%*s" "$(( $p*$w/100 ))" ""; dots=${dots// /.};
+    # print those dots on a fixed-width space plus the percentage etc. 
+    printf "\r\e[K|%-*s| %3d %% %s" "$w" "$dots" "$p" "$*"; 
+}
+
+taxon_add=1
+options_add=1
+attributes_add=1
+images_add=1
+products_add=1
+variants_add=0
+
+
+
+
+if (($taxon_add==1)); then
+IFS=$'\n'
+    # выгрузка категорий
+    echo -e "${BLUE}загрузка категорий${NORMAL}"
+
+    cat ./temple_taxons_gen.sql | sed "s/SELECT command/select count(*)/" > cnt.sql
+    cnt="$(mysql --user=root --password=GkMDk6br --host=192.168.1.37 --database=$database --disable-column-names < cnt.sql)"    
+
+    commands="$(mysql --user=root --password=GkMDk6br --host=192.168.1.37 --database=$database --disable-column-names < temple_taxons_gen.sql)"
+    date_change="$(./statx token | grep Change | cut -c 9-38)"
+    let db="$(date --date "$date_change" +%s)"
+    let i=0
+#    echo -e $commands> taxon
+    for command in $commands; do
+	if  [[ $(date +%s)-$db -gt 3550 ]]  ;then
+	    access_token="$(./get_token)"
+	fi
+	c=$(echo -e $command | sed "s/address/curl --silent http:\/\/192.168.1.144:8000/" | sed "s/token/$access_token/" | sed "s/\n//")
+	result="$(eval $c)"
+
+	let procent=$i*100/$cnt
+	prog "$procent" "категории N$i"
+	let i=$i+1
+	if [[ "$result" == *"error"* ]] || [[ "$result" == *"Invalid"* ]]; then
+	    echo -e $c
+	    echo -e $result
+	    echo -e $result | jq -r '.errors'
+	    exit
+	fi
+    done
+fi
+
+#./get_token
+
+if (($options_add==1)); then
+    # выгрузка опций
+    echo -e "${BLUE}загрузка опций${NORMAL}"
+    commands="$(mysql --user=root --password=GkMDk6br --host=192.168.1.37 --database=$database --disable-column-names < temple_options.sql)"
+    commands="curl $url/v1/product-options/ -H \"Authorization: Bearer $access_token\" -H \"Content-Type: application/json\" -X POST --data '$commands'"
+    echo -e "$commands"> product-options_add.sh
+    chmod +x product-options_add.sh
+    ./product-options_add.sh
+fi
+
+if (($images_add==1)); then
+    # загрузка фото из БД
+    echo -e "${BLUE}выгрузка фото из $database в sylius_images${NORMAL}"
+    php ./get_images_from_mysql.php -d $database
+
+fi
+
+#./get_token
+
+if (($attributes_add==1)); then
+    # выгрузка атрибутов
+    echo -e "${BLUE}загрузка атрибутов${NORMAL}"
+    commands="{\"code\": \"sex\",\"translations\": {\"ru_RU\": {\"name\": \"пол\" } } }"    
+    commands="curl $url/v1/product-attributes/text -H \"Authorization: Bearer $access_token\" -H \"Content-Type: application/json\" -X POST --data '$commands'"
+    echo -e "$commands"> product-attributes_add.sh
+    chmod +x product-attributes_add.sh
+    ./product-attributes_add.sh
+fi
+
+if (($products_add==1)); then
+    # выгрузка товара
+    echo -e "${BLUE}загрузка товаров${NORMAL}"
+    IFS=$'\n'
+
+    commands="$(mysql --user=root --password=GkMDk6br --host=192.168.1.37 --database=$database --disable-column-names < temple_products_gen.sql)"
+
+    date_change="$(./statx token | grep Change | cut -c 9-38)"
+    let db="$(date --date "$date_change" +%s)"
+    let i=0
+    cnt="$(mysql --user=root --password=GkMDk6br --host=192.168.1.37 --database=$database --disable-column-names -e 'select count(*) from show_tovar where vid_prodan=0')"
+    echo $cnt
+    for command in $commands; do
+
+	let procent=$i*100/$cnt
+	prog "$procent" "товар N$i"
+
+	if  [[ $(date +%s)-$db -gt 3550 ]]  ;then
+	    access_token="$(./get_token)"
+	fi
+	c=$(echo $command | sed "s/address/curl --silent http:\/\/192.168.1.144:8000/g" | sed "s/token/$access_token/g" | sed "s/NULL//")
+
+	result="$(eval $c)"
+	if [[ "$result" == *"error"* ]]; then
+	    echo $c
+	    echo -e $result
+	    echo $result | jq -r '.errors'
+	    exit
+	fi
+    done
+fi
+
+if (($products_add==-1)); then
+    # удаление товара
+    echo -e "${BLUE}удаление товара${NORMAL}"
+
+    echo -e "curl --silent $url/v1/products/ -H \"Authorization: Bearer $access_token\" -H \"Content-Type: application/json\" -X GET"
+    result=$(curl --silent $url/v1/products/ -H "Authorization: Bearer $access_token" -H "Content-Type: application/json" -X GET)
+    echo $result
+
+
+
+
+fi
+
+if (($variants_add==1)); then
+    # выгрузка вариантов
+    echo -e "${BLUE}загрузка вариантов${NORMAL}"
+    commands="$(mysql --user=root --password=GkMDk6br --host=192.168.1.37 --database=$database --disable-column-names -e 'SELECT id,articule,razmery,kolvo FROM show_tovar where vid_prodan=0;')"
+    #echo -e $commands
+#    variants="$(curl $url/v1/taxons/ -H "Authorization: Bearer $access_token" -X GET)"
+
+
+fi

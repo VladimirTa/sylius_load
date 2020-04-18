@@ -1,0 +1,1 @@
+curl http://192.168.1.144:8000/api/v1/product-attributes/text -H "Authorization: Bearer OWIwMjMxZjUxMjUwNWYyNDAwOGM3MWEzNWY3NmEwODJmNDU1Njg2MDIwNTIyYjNlMzJiMjVjNTRhNTM4NmNlMA" -H "Content-Type: application/json" -X POST --data '{"code": "sex","translations": {"ru_RU": {"name": "пол" } } }'

@@ -1,0 +1,45 @@
+#!/bin/bash
+
+url="http://192.168.1.144:8000/api"
+database="old_shop2"
+
+NORMAL='\033[0m'
+RED='\033[0;31m'       #  ${RED}      # красный цвет знаков
+GREEN='\033[0;32m'     #  ${GREEN}    # зелёный цвет знаков
+BLUE='\033[0;34m'       #  ${BLUE}      # синий цвет знаков
+
+
+if [ -f "token" ]; then
+    date_change="$(./statx token | grep Change | cut -c 9-38)"
+    let db="$(date --date "$date_change" +%s)"
+    let dn="$(date +%s)"
+    let exp=$dn-$db
+
+    if  [[ $exp -gt 3600 ]] || [[ $# -eq 1 ]]  ;then
+
+        echo "время тоена истекло $exp"
+	refresh_token="$(cat token | jq -r '.refresh_token')"
+	client_id="$(cat client_auth | jq -r '.client_id')"
+	secret="$(cat client_auth | jq -r '.secret')"
+	
+	token_info="$(curl --silent $url/oauth/v2/token -d "client_id"=$client_id -d "client_secret"=$secret -d "grant_type"=refresh_token -d "refresh_token"=$refresh_token)"
+	echo $token_info > "token"
+    fi
+
+else
+
+    client="$(php ../bin/console sylius:oauth-server:create-client --grant-type="password" --grant-type="refresh_token" --grant-type="token")"
+
+    IFS=',' read -ra arr <<< "$client"
+    IFS=' ' read -ra t1 <<< "${arr[0]}"
+    IFS=' ' read -ra t2 <<< "${arr[1]}"
+
+    res1=${t1[6]}
+    res2=${t2[1]}
+    echo "{\"client_id\": \"$res1\", \"secret\": \"$res2\"}"> "client_auth"
+
+    token_info="$(curl --silent $url/oauth/v2/token -d "client_id"=$res1 -d "client_secret"=$res2 -d "grant_type"=password -d "username"=tarkhantsevva@yandex.ru -d "password"=19801979)"
+    echo $token_info > "token"
+fi
+
+echo "$(cat token | jq -r '.access_token')"
